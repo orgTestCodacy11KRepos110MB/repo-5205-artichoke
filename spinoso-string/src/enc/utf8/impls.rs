@@ -1,7 +1,6 @@
 use alloc::borrow::Cow;
 use alloc::string::String;
 use alloc::vec::Vec;
-use core::ops::{Deref, DerefMut};
 
 use super::Utf8String;
 
@@ -86,35 +85,5 @@ impl AsMut<[u8]> for Utf8String {
     #[inline]
     fn as_mut(&mut self) -> &mut [u8] {
         self.inner.as_mut_slice()
-    }
-}
-
-impl AsRef<Vec<u8>> for Utf8String {
-    #[inline]
-    fn as_ref(&self) -> &Vec<u8> {
-        &self.inner
-    }
-}
-
-impl AsMut<Vec<u8>> for Utf8String {
-    #[inline]
-    fn as_mut(&mut self) -> &mut Vec<u8> {
-        &mut self.inner
-    }
-}
-
-impl Deref for Utf8String {
-    type Target = [u8];
-
-    #[inline]
-    fn deref(&self) -> &[u8] {
-        &*self.inner
-    }
-}
-
-impl DerefMut for Utf8String {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut [u8] {
-        &mut *self.inner
     }
 }

@@ -541,7 +541,7 @@ impl EncodedString {
         match self {
             EncodedString::Ascii(inner) => inner.chr(),
             EncodedString::Binary(inner) => inner.chr(),
-            EncodedString::Utf8(inner) => inner.chr(),
+            EncodedString::Utf8(inner) => inner.chr().as_byte_slice(),
         }
     }
 
