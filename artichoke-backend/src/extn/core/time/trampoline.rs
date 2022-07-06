@@ -1,5 +1,7 @@
 //! Glue between mruby FFI and `Time` Rust implementation.
+use core::hash::{BuildHasher, Hash, Hasher};
 
+use artichoke_core::hash::Hash as _;
 use spinoso_time::MICROS_IN_NANO;
 
 use crate::convert::{implicitly_convert_to_int, implicitly_convert_to_string};
@@ -193,10 +195,13 @@ pub fn eql(interp: &mut Artichoke, mut time: Value, mut other: Value) -> Result<
     }
 }
 
-pub fn hash(interp: &mut Artichoke, time: Value) -> Result<Value, Error> {
-    let _ = interp;
-    let _ = time;
-    Err(NotImplementedError::new().into())
+pub fn hash(interp: &mut Artichoke, mut time: Value) -> Result<Value, Error> {
+    let time = unsafe { Time::unbox_from_value(&mut time, interp)? };
+    let mut hasher = interp.global_build_hasher()?.build_hasher();
+    time.hash(&mut hasher);
+    #[allow(clippy::cast_possible_wrap)]
+    let hash = hasher.finish() as i64;
+    Ok(interp.convert(hash))
 }
 
 pub fn initialize<T>(interp: &mut Artichoke, time: Value, args: T) -> Result<Value, Error>
@@ -217,11 +222,18 @@ pub fn initialize_copy(interp: &mut Artichoke, time: Value, mut from: Value) -> 
 
 // Mutators and converters
 
-pub fn mutate_to_local(interp: &mut Artichoke, time: Value, offset: Option<Value>) -> Result<Value, Error> {
-    let _ = interp;
-    let _ = time;
-    let _ = offset;
-    Err(NotImplementedError::new().into())
+pub fn mutate_to_local(interp: &mut Artichoke, mut time: Value, offset: Option<Value>) -> Result<Value, Error> {
+    let mut obj = unsafe { Time::unbox_from_value(&mut time, interp)? };
+
+    if let Some(offset) = offset {
+        let offset = offset_from_value(interp, offset)?;
+        obj.set_offset(offset)
+    } else {
+        obj.set_local()
+    }
+    .map_err(convert_time_error_to_argument_error)?;
+
+    Ok(time)
 }
 
 pub fn mutate_to_utc(interp: &mut Artichoke, mut time: Value) -> Result<Value, Error> {
@@ -231,11 +243,18 @@ pub fn mutate_to_utc(interp: &mut Artichoke, mut time: Value) -> Result<Value, E
     Ok(time)
 }
 
-pub fn as_local(interp: &mut Artichoke, time: Value, offset: Option<Value>) -> Result<Value, Error> {
-    let _ = interp;
-    let _ = time;
-    let _ = offset;
-    Err(NotImplementedError::new().into())
+pub fn as_local(interp: &mut Artichoke, mut time: Value, offset: Option<Value>) -> Result<Value, Error> {
+    let obj = unsafe { Time::unbox_from_value(&mut time, interp)? };
+
+    let next = if let Some(offset) = offset {
+        let offset = offset_from_value(interp, offset)?;
+        obj.to_offset(offset)
+    } else {
+        obj.to_local()
+    }
+    .map_err(convert_time_error_to_argument_error)?;
+
+    Time::alloc_value(next, interp)
 }
 
 pub fn as_utc(interp: &mut Artichoke, mut time: Value) -> Result<Value, Error> {
@@ -254,23 +273,9 @@ pub fn asctime(interp: &mut Artichoke, time: Value) -> Result<Value, Error> {
     Err(NotImplementedError::new().into())
 }
 
-pub fn to_string(interp: &mut Artichoke, time: Value) -> Result<Value, Error> {
-    let _ = time;
-    // XXX: This function is used to implement `Time#inspect`. Raising in an
-    // `#inspect` implementation interacts poorly with the locals table when
-    // running Artichoke in a REPL.
-    //
-    // Rather than fix this, which will involve deep diving into mruby, work
-    // around this by returning a `String` that says `Time#inspect` is not
-    // implemented. This allows us to uphold the API contract without
-    // implementing `strftime`.
-    //
-    // This hack replaces this code:
-    //
-    // ```rust
-    // Err(NotImplementedError::new().into())
-    // ```
-    interp.try_convert_mut("Time<Time#inspect is not implemented>")
+pub fn to_string(interp: &mut Artichoke, mut time: Value) -> Result<Value, Error> {
+    let time = unsafe { Time::unbox_from_value(&mut time, interp)? };
+    interp.try_convert_mut(time.to_string())
 }
 
 pub fn to_array(interp: &mut Artichoke, time: Value) -> Result<Value, Error> {
@@ -332,11 +337,18 @@ pub fn succ(interp: &mut Artichoke, time: Value) -> Result<Value, Error> {
     plus(interp, time, interp.convert(1))
 }
 
-pub fn round(interp: &mut Artichoke, time: Value, num_digits: Option<Value>) -> Result<Value, Error> {
-    let _ = interp;
-    let _ = time;
-    let _ = num_digits;
-    Err(NotImplementedError::new().into())
+pub fn round(interp: &mut Artichoke, mut time: Value, num_digits: Option<Value>) -> Result<Value, Error> {
+    let time = unsafe { Time::unbox_from_value(&mut time, interp)? };
+    let digits = if let Some(digits) = num_digits {
+        u32::try_from(implicitly_convert_to_int(interp, digits)?)
+            .map_err(|_| RangeError::with_message("too big to convert to u32"))?
+    } else {
+        0
+    };
+
+    let next = time.round(digits);
+
+    Time::alloc_value(next, interp)
 }
 
 // Datetime
@@ -403,16 +415,16 @@ pub fn is_dst(interp: &mut Artichoke, mut time: Value) -> Result<Value, Error> {
     Ok(interp.convert(is_dst))
 }
 
-pub fn timezone(interp: &mut Artichoke, time: Value) -> Result<Value, Error> {
-    let _ = interp;
-    let _ = time;
-    Err(NotImplementedError::new().into())
+pub fn timezone(interp: &mut Artichoke, mut time: Value) -> Result<Value, Error> {
+    let time = unsafe { Time::unbox_from_value(&mut time, interp)? };
+    let time_zone = time.time_zone();
+    interp.try_convert_mut(time_zone)
 }
 
-pub fn utc_offset(interp: &mut Artichoke, time: Value) -> Result<Value, Error> {
-    let _ = interp;
-    let _ = time;
-    Err(NotImplementedError::new().into())
+pub fn utc_offset(interp: &mut Artichoke, mut time: Value) -> Result<Value, Error> {
+    let time = unsafe { Time::unbox_from_value(&mut time, interp)? };
+    let utc_offset = time.utc_offset();
+    Ok(interp.convert(utc_offset))
 }
 
 // Timezone mode
