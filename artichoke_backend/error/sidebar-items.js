@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["raise","Raise implementation for [`RubyException`] boxed trait objects."]],"struct":[["Error","The `Error` type, a wrapper around a dynamic exception type."]],"trait":[["RubyException","Polymorphic exception type that corresponds to Ruby’s `Exception`."]]};

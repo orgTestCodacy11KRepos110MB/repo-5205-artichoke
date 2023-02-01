@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":[["mock","Mock random number generator"]],"struct":[["OsRng","A random number generator that retrieves randomness from the operating system."]]};

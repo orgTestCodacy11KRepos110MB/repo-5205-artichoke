@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["offset_to_index","Convert a signed aref offset to a `usize` index into the underlying container."]]};

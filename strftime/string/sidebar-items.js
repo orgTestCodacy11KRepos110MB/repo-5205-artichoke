@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["strftime","Format a time implementation with the specified UTF-8 format string."]]};
